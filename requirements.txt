@@ -11,10 +11,14 @@
 #     PYTHONPATH=src python -m supertonic_server.server
 #
 # For test-only deps (pytest, etc.), see requirements-dev.txt.
+# For GPU/CUDA inference, ALSO install requirements-gpu.txt — see that
+# file's header for the (important) install order.
 
 # --- Core TTS engine ---
-# On-device, ONNX-Runtime-based Hindi-capable TTS. CPU-only today
-# (no `providers=` knob exposed); see worker.py for context.
+# On-device, ONNX-Runtime-based Hindi-capable TTS. This pulls in the CPU
+# `onnxruntime` transitively. `supertonic_server.worker._apply_device`
+# pins the ONNX execution providers (CUDA vs CPU); for GPU you must
+# replace `onnxruntime` with `onnxruntime-gpu` via requirements-gpu.txt.
 supertonic>=1.3.1
 
 # --- WebSocket server stack ---

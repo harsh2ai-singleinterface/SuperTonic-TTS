@@ -48,6 +48,7 @@ class WorkerPool:
         total_steps: int = 8,
         speed: float = 1.0,
         lang: str = "hi",
+        device: str = "auto",
     ) -> None:
         if n_workers < 1:
             raise ValueError(f"n_workers must be ≥ 1, got {n_workers}")
@@ -56,6 +57,7 @@ class WorkerPool:
         self._total_steps = total_steps
         self._speed = speed
         self._lang = lang
+        self._device = device
 
         self._workers: list[SupertonicWorker] = []
         self._executor: ThreadPoolExecutor | None = None
@@ -83,6 +85,7 @@ class WorkerPool:
                     total_steps=self._total_steps,
                     speed=self._speed,
                     lang=self._lang,
+                    device=self._device,
                 )
                 w.warmup()
                 built.append(w)

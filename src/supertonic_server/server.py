@@ -45,6 +45,9 @@ def _env_int(key: str, default: int) -> int:
 
 N_WORKERS = _env_int("SUPERTONIC_WORKERS", 2)
 TOTAL_STEPS = _env_int("SUPERTONIC_STEPS", 8)
+# Inference device: "cuda" (GPU, CPU fallback), "cpu", or "auto". Default is
+# "cuda" — the worker logs an error and falls back to CPU if no GPU is usable.
+DEVICE = os.environ.get("SUPERTONIC_DEVICE", "cuda").strip() or "cuda"
 
 
 @asynccontextmanager
@@ -54,8 +57,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         level=os.environ.get("SUPERTONIC_LOG_LEVEL", "INFO"),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    pool = WorkerPool(n_workers=N_WORKERS, total_steps=TOTAL_STEPS)
-    logger.info("starting pool: workers=%d steps=%d", N_WORKERS, TOTAL_STEPS)
+    pool = WorkerPool(n_workers=N_WORKERS, total_steps=TOTAL_STEPS, device=DEVICE)
+    logger.info(
+        "starting pool: workers=%d steps=%d device=%s",
+        N_WORKERS, TOTAL_STEPS, DEVICE,
+    )
     await pool.start()
     app.state.pool = pool
     try:

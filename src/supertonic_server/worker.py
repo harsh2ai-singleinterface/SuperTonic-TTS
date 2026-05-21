@@ -22,6 +22,7 @@ import numpy as np
 from supertonic import TTS
 
 from . import voices as _voices
+from .cuda import cuda_is_usable
 
 logger = logging.getLogger("supertonic_server.worker")
 
@@ -33,6 +34,61 @@ _NATIVE_SR: int = 44100
 # Tiny prompt used for warmup — just enough to push the model through one
 # full synth path so the first real call is hot.
 _WARMUP_TEXT: str = "नमस्ते।"
+
+# ONNX Runtime execution-provider lists by device. CUDA keeps CPU as a
+# fallback so any op without a CUDA kernel still runs.
+_CUDA_PROVIDERS: list[str] = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+_CPU_PROVIDERS: list[str] = ["CPUExecutionProvider"]
+
+# Default device when none is given. "auto" => GPU if usable, else CPU.
+_DEFAULT_DEVICE: str = "auto"
+
+
+def _apply_device(device: str) -> list[str]:
+    """Resolve ``device`` to an ONNX provider list and pin supertonic to it.
+
+    ``device`` is one of:
+
+    * ``"cuda"`` / ``"gpu"`` — run on the GPU; if the CUDA provider can't be
+      loaded this logs an error and falls back to CPU (synthesis still works,
+      just slower).
+    * ``"cpu"``              — force CPU.
+    * ``"auto"``             — GPU when usable, else CPU, without complaint.
+
+    supertonic 1.3.1 hard-codes ``DEFAULT_ONNX_PROVIDERS`` and exposes no
+    ``providers=`` knob on :class:`~supertonic.TTS`. Its loader reads
+    ``supertonic.loader.DEFAULT_ONNX_PROVIDERS`` at model-load time, so we
+    overwrite that module attribute here. Must be called *before* ``TTS()``.
+
+    Returns the provider list that was applied.
+    """
+    device = device.strip().lower()
+    if device not in ("cuda", "gpu", "auto", "cpu"):
+        raise ValueError(
+            f"unknown device {device!r}; expected 'cuda', 'cpu', or 'auto'"
+        )
+
+    if device == "cpu":
+        providers = _CPU_PROVIDERS
+    elif cuda_is_usable():
+        providers = _CUDA_PROVIDERS
+    else:
+        if device in ("cuda", "gpu"):
+            logger.error(
+                "device=%s requested but the CUDA execution provider could "
+                "not be loaded — falling back to CPU. Install 'onnxruntime-gpu' "
+                "plus the nvidia-*-cu12 wheels (see requirements.txt).",
+                device,
+            )
+        providers = _CPU_PROVIDERS
+
+    # `supertonic.loader` looks up DEFAULT_ONNX_PROVIDERS as a module global at
+    # session-creation time, so patching the attribute here takes effect for
+    # the TTS() constructed next.
+    import supertonic.loader as _st_loader
+
+    _st_loader.DEFAULT_ONNX_PROVIDERS = providers
+    return providers
 
 
 @dataclass(slots=True)
@@ -68,6 +124,7 @@ class SupertonicWorker:
         total_steps: int = 8,
         speed: float = 1.0,
         lang: str = "hi",
+        device: str = _DEFAULT_DEVICE,
     ) -> None:
         """Load the TTS model immediately.
 
@@ -78,11 +135,15 @@ class SupertonicWorker:
             total_steps: Diffusion steps per synth. Lower = faster, less crisp.
             speed:       Playback speed multiplier (1.0 = natural).
             lang:        Language hint passed to ``synthesize``.
+            device:      Inference device — ``"cuda"`` / ``"gpu"``, ``"cpu"``,
+                         or ``"auto"`` (GPU when usable, else CPU). See
+                         :func:`_apply_device`.
         """
         self._cache_dir = cache_dir
         self._total_steps = total_steps
         self._speed = speed
         self._lang = lang
+        self._device = device
 
         # voice_name -> Style object (opaque; supertonic-internal)
         self._style_cache: dict[str, Any] = {}
@@ -90,7 +151,12 @@ class SupertonicWorker:
         self._style_hits: dict[str, int] = {}
         self._warm: bool = False
 
-        logger.info("loading Supertonic TTS model")
+        # Pin ONNX Runtime to the requested device *before* TTS() builds its
+        # inference sessions.
+        providers = _apply_device(device)
+
+        logger.info("loading Supertonic TTS model (device=%s, providers=%s)",
+                    device, providers)
         t0 = time.perf_counter()
         self._tts: TTS = TTS(auto_download=True)
         logger.info("Supertonic TTS model loaded in %.2fs", time.perf_counter() - t0)

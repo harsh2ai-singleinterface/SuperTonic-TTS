@@ -1,0 +1,33 @@
+# GPU (CUDA) runtime dependencies for supertonic_server.
+#
+# Enables the CUDAExecutionProvider so synthesis runs on an NVIDIA GPU.
+# Requires an NVIDIA GPU + driver new enough for CUDA 12.x.
+#
+# INSTALL ORDER MATTERS. `supertonic` depends on the CPU-only `onnxruntime`
+# distribution; `onnxruntime-gpu` is a *separate* distribution that ships the
+# same `onnxruntime` import package. Having both installed corrupts the
+# install, so the CPU one must be removed:
+#
+#     pip install -r requirements.txt
+#     pip uninstall -y onnxruntime
+#     pip install -r requirements-gpu.txt
+#
+# Then run with the GPU:
+#
+#     SUPERTONIC_DEVICE=cuda PYTHONPATH=src python -m supertonic_server.server
+#
+# The CUDA/cuDNN libraries below come from pip wheels and live under
+# site-packages/nvidia/*/lib — a path the dynamic linker does not search.
+# `supertonic_server.cuda.preload_cuda_libraries()` loads them at startup,
+# so no LD_LIBRARY_PATH setup is needed.
+
+# --- ONNX Runtime, CUDA build ---
+onnxruntime-gpu>=1.26
+
+# --- CUDA 12 / cuDNN 9 runtime libraries (pip wheels) ---
+nvidia-cuda-runtime-cu12
+nvidia-cuda-nvrtc-cu12
+nvidia-cublas-cu12
+nvidia-cufft-cu12
+nvidia-curand-cu12
+nvidia-cudnn-cu12
