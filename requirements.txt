@@ -1,0 +1,39 @@
+# Runtime dependencies for supertonic_server.
+#
+# Mirrors `[project.dependencies]` in pyproject.toml so a plain
+# `pip install -r requirements.txt` works in environments that don't
+# use uv or hatchling. Keep the two lists in sync.
+#
+# Install:
+#     pip install -r requirements.txt
+#
+# Then run:
+#     PYTHONPATH=src python -m supertonic_server.server
+#
+# For test-only deps (pytest, etc.), see requirements-dev.txt.
+
+# --- Core TTS engine ---
+# On-device, ONNX-Runtime-based Hindi-capable TTS. CPU-only today
+# (no `providers=` knob exposed); see worker.py for context.
+supertonic>=1.3.1
+
+# --- WebSocket server stack ---
+# FastAPI hosts the Cartesia-shaped /tts/websocket endpoint plus the
+# /voices, /health, /ready REST routes. uvicorn[standard] pulls in
+# uvloop + httptools + watchfiles for the production-grade event loop
+# and live-reload during development.
+fastapi>=0.115
+uvicorn[standard]>=0.32
+
+# Used by the smoke-test client scripts in scripts/. Server itself uses
+# FastAPI's built-in WebSocket support, but the test clients dial the
+# server with this library directly.
+websockets>=13
+
+# --- Audio pipeline ---
+# numpy: int16/float32 array math in audio.py
+# scipy: resample_poly for the 44.1kHz -> 24kHz downsample
+# soundfile: write reference WAVs from smoke tests and worker tests
+numpy>=2.0
+scipy>=1.13
+soundfile>=0.13

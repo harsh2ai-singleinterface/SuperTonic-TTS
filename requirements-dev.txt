@@ -1,0 +1,18 @@
+# Development / test dependencies on top of requirements.txt.
+#
+# Mirrors `[project.optional-dependencies].dev` in pyproject.toml.
+#
+# Install runtime + dev together:
+#     pip install -r requirements.txt -r requirements-dev.txt
+#
+# Then run the test suite:
+#     PYTHONPATH=src python -m pytest
+
+-r requirements.txt
+
+# Test runner + async support
+pytest>=8
+pytest-asyncio>=0.24
+
+# Used by the FastAPI TestClient + WebSocket-test helpers
+httpx>=0.27
